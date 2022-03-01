@@ -40,51 +40,57 @@ class MainActivity : AppCompatActivity() {
 
     private val chipDragListener = View.OnDragListener { chipGroup, dragEvent ->
         chipGroup as ChipGroup
-        val draggableItem = dragEvent.localState as View
-        val dragViewIndex = chipGroup.indexOfChild(draggableItem)
+        val dragView = dragEvent.localState as View
+        val dragViewIndex = chipGroup.indexOfChild(dragView)
 
         when (dragEvent.action) {
             DragEvent.ACTION_DRAG_STARTED -> {
+                dragView.visibility = View.INVISIBLE
                 true
             }
 
             DragEvent.ACTION_DRAG_ENTERED -> {
-                draggableItem.visibility = View.INVISIBLE
                 true
             }
 
             DragEvent.ACTION_DRAG_LOCATION -> {
                 val shiftIndex = findViewToShift(chipGroup, dragEvent.x, dragEvent.y)
+                mChipShadow.savePosition(dragEvent.x, dragEvent.y)
                 if (shiftIndex != -1 && shiftIndex != dragViewIndex) {
                     shiftViews(chipGroup, dragViewIndex, shiftIndex)
                 }
                 true
             }
+
             DragEvent.ACTION_DRAG_EXITED -> {
-                draggableItem.visibility = View.VISIBLE
-                chipGroup.invalidate()
                 true
             }
+
             DragEvent.ACTION_DROP -> {
+                chipGroup.layoutTransition.setAnimator(
+                    LayoutTransition.APPEARING, mChipShadow.getReleaseAnimatorSet()
+                )
+                // This statement ensures that the dragView is drawn above all other chips after
+                // drop assuming that all chips have zero elevation. The APPEARING translation
+                // will settle the chip back to zero elevation.
+                // Todo: Need a better way to ensure that dragged chips are drawn over other chips.
+                dragView.elevation = 1f
+
+                dragView.visibility = View.VISIBLE
                 true
             }
+
             DragEvent.ACTION_DRAG_ENDED -> {
-                draggableItem.visibility = View.VISIBLE
-                chipGroup.invalidate()
                 true
             }
+
             else -> {
                 false
             }
-
         }
     }
 
-    private fun findViewToShift(
-        chipGroup: ChipGroup,
-        posX: Float,
-        posY: Float
-    ): Int {
+    private fun findViewToShift(chipGroup: ChipGroup, posX: Float, posY: Float): Int {
         val hitRect = Rect()
         for (i in 0 until chipGroup.childCount) {
             val view = chipGroup.getChildAt(i)
@@ -106,9 +112,10 @@ class MainActivity : AppCompatActivity() {
         // the view to allow the parent to be set to null in the removed view then enable
         // transitions to add the view back.
         chipGroup.apply {
+            val saveTransition = layoutTransition
             layoutTransition = null
             removeViewAt(dragViewIndex)
-            layoutTransition = LayoutTransition()
+            layoutTransition = saveTransition
             addView(dragView, viewToShiftIndex)
         }
     }
@@ -119,10 +126,8 @@ class MainActivity : AppCompatActivity() {
 
             binding.chipGroup.getChildAt(i).setOnLongClickListener { view: View ->
 
-                // Instantiates the drag shadow builder.
                 mChipShadow = ChipShadowBuilder(view)
 
-                // Starts the drag
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
                     @Suppress("DEPRECATION")
                     view.startDrag(null, mChipShadow, view, 0)
