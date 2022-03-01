@@ -1,5 +1,6 @@
 package com.example.chipgroupreorder
 
+import android.animation.LayoutTransition
 import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.graphics.Rect
@@ -95,10 +96,21 @@ class MainActivity : AppCompatActivity() {
         return -1
     }
 
-    private fun shiftViews(chipGroup: ChipGroup, view1Index: Int, view2Index: Int) {
-        val view1 = chipGroup.getChildAt(view1Index)
-        chipGroup.removeViewAt(view1Index)
-        chipGroup.addView(view1, view2Index)
+    private fun shiftViews(chipGroup: ChipGroup, dragViewIndex: Int, viewToShiftIndex: Int) {
+        val dragView = chipGroup.getChildAt(dragViewIndex)
+        // The view system holds onto the parent of a removed view if a transition is pending.
+        // This sometimes results in an IllegatStateException
+        //     "The specified child already has a parent. You must call removeView() on the child's
+        //     parent first."
+        // which may be due to some sort of race condition. Kill the transition before removing
+        // the view to allow the parent to be set to null in the removed view then enable
+        // transitions to add the view back.
+        chipGroup.apply {
+            layoutTransition = null
+            removeViewAt(dragViewIndex)
+            layoutTransition = LayoutTransition()
+            addView(dragView, viewToShiftIndex)
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
