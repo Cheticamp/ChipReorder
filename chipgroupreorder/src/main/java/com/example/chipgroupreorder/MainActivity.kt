@@ -15,7 +15,6 @@ import com.google.android.material.chip.ChipGroup
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var mChipShadow: ChipShadowBuilder
     private lateinit var binding: ActivityMainBinding
 
     @SuppressLint("SetTextI18n")
@@ -32,7 +31,7 @@ class MainActivity : AppCompatActivity() {
                 binding.chipGroup.addView(this)
             }
         }
-        attachViewDragListener()
+        attachViewDragListener(0f)
 
         binding.chipGroup.setOnDragListener(chipDragListener)
 
@@ -40,51 +39,57 @@ class MainActivity : AppCompatActivity() {
 
     private val chipDragListener = View.OnDragListener { chipGroup, dragEvent ->
         chipGroup as ChipGroup
-        val draggableItem = dragEvent.localState as View
-        val dragViewIndex = chipGroup.indexOfChild(draggableItem)
+        val chipShadow = dragEvent.localState as ChipShadowBuilder
+        val dragView = chipShadow.view
 
         when (dragEvent.action) {
             DragEvent.ACTION_DRAG_STARTED -> {
+                dragView.visibility = View.INVISIBLE
                 true
             }
 
             DragEvent.ACTION_DRAG_ENTERED -> {
-                draggableItem.visibility = View.INVISIBLE
                 true
             }
 
             DragEvent.ACTION_DRAG_LOCATION -> {
+                val dragViewIndex = chipGroup.indexOfChild(dragView)
                 val shiftIndex = findViewToShift(chipGroup, dragEvent.x, dragEvent.y)
+                chipShadow.savePosition(dragEvent.x, dragEvent.y)
                 if (shiftIndex != -1 && shiftIndex != dragViewIndex) {
                     shiftViews(chipGroup, dragViewIndex, shiftIndex)
                 }
                 true
             }
+
             DragEvent.ACTION_DRAG_EXITED -> {
-                draggableItem.visibility = View.VISIBLE
-                chipGroup.invalidate()
                 true
             }
+
             DragEvent.ACTION_DROP -> {
+                chipGroup.layoutTransition.setAnimator(
+                    LayoutTransition.APPEARING, chipShadow.getReleaseAnimatorSet()
+                )
+                // This statement ensures that the dragView is drawn above all other chips after
+                // drop assuming that all chips have zero elevation. The APPEARING translation
+                // will settle the chip back to zero elevation.
+                dragView.elevation = chipShadow.getMaxElevation() + 1
+
+                dragView.visibility = View.VISIBLE
                 true
             }
+
             DragEvent.ACTION_DRAG_ENDED -> {
-                draggableItem.visibility = View.VISIBLE
-                chipGroup.invalidate()
                 true
             }
+
             else -> {
                 false
             }
-
         }
     }
 
-    private fun findViewToShift(
-        chipGroup: ChipGroup,
-        posX: Float,
-        posY: Float
-    ): Int {
+    private fun findViewToShift(chipGroup: ChipGroup, posX: Float, posY: Float): Int {
         val hitRect = Rect()
         for (i in 0 until chipGroup.childCount) {
             val view = chipGroup.getChildAt(i)
@@ -106,28 +111,27 @@ class MainActivity : AppCompatActivity() {
         // the view to allow the parent to be set to null in the removed view then enable
         // transitions to add the view back.
         chipGroup.apply {
+            val saveTransition = layoutTransition
             layoutTransition = null
             removeViewAt(dragViewIndex)
-            layoutTransition = LayoutTransition()
+            layoutTransition = saveTransition
             addView(dragView, viewToShiftIndex)
         }
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun attachViewDragListener() {
+    private fun attachViewDragListener(maxElevation: Float) {
         for (i in 0 until binding.chipGroup.childCount) {
 
             binding.chipGroup.getChildAt(i).setOnLongClickListener { view: View ->
 
-                // Instantiates the drag shadow builder.
-                mChipShadow = ChipShadowBuilder(view)
+                val chipShadow = ChipShadowBuilder(view, maxElevation)
 
-                // Starts the drag
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
                     @Suppress("DEPRECATION")
-                    view.startDrag(null, mChipShadow, view, 0)
+                    view.startDrag(null, chipShadow, chipShadow, 0)
                 } else {
-                    view.startDragAndDrop(null, mChipShadow, view, 0)
+                    view.startDragAndDrop(null, chipShadow, chipShadow, 0)
                 }
                 true
             }
